@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>造价文件查看器 · 造价工具箱</title>
+<script src="../assets/vendor/fflate/fflate.min.js"></script>
+<style>
+  :root { --brand: #0f766e; --ink: #0b1c30; --muted: #64748b; --line: #dbe4ef; --bg: #f6f8fb; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.6; }
+  header { background: #0b1c30; color: #fff; padding: 18px 20px; }
+  header a { color: #a2f1e7; }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  h2 { font-size: 17px; margin: 22px 0 8px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 14px; }
+  .note { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 12px 14px; }
+  .note.warn { background: #fffbeb; border-color: #fde68a; }
+  .note.bad { background: #fef2f2; border-color: #fecaca; }
+  .note.demo { background: #eff6ff; border-color: #bfdbfe; }
+  #drop { border: 2px dashed #94a3b8; border-radius: 12px; padding: 28px 16px; text-align: center; cursor: pointer; background: #fff; }
+  #drop.over { border-color: var(--brand); background: #f0fdfa; }
+  input, button { font: inherit; }
+  input[type="search"] { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; width: 100%; max-width: 420px; }
+  button.primary { background: var(--brand); color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+  button.ghost { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .tabs button { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+  .tabs button.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
+  th { color: var(--muted); }
+  td.num, th.num { text-align: right; }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #f1f5f9; border-radius: 8px; padding: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  @media (max-width: 640px) { table { font-size: 12px; } th, td { padding: 6px 4px; } }
+</style>
+</head>
+<body>
+<header>
+  <a href="./index.html">← 工具箱首页</a>
+  <h1>造价文件查看器</h1>
+  <p style="margin:0;color:#cbd5e1">只接受 .GCFX / .SGCFX 文件。文件只在浏览器本地读取和解析，不上传到任何服务器。</p>
+</header>
+<main>
+  <div class="note">
+    <strong>兼容性说明（请先读）：</strong>本页不声称兼容所有 GCFX 版本。计价软件的 .GCFX / .SGCFX 内部格式因软件和版本而异，
+    本页先识别容器（ZIP / XML 文本 / 二进制专有格式），能解压的列出内部文件，能解析出结构化数据的才展示金额；
+    解析不到的字段留空并明确提示，不编造金额。已对一例真实 GCFX 样例做过对照验证：分部分项清单 320 行、费用表 10 个单位工程，
+    清单合计与费用表、与原软件导出对照表逐单位核对差额均为 0.00 元；但不同软件版本仍可能不兼容，解析失败时本页会如实提示。
+  </div>
+
+  <div class="card">
+    <div id="drop" tabindex="0" role="button" aria-label="选择或拖拽造价文件">
+      <p><strong>把 .GCFX / .SGCFX 文件拖到这里，或点这里选择文件</strong></p>
+      <p class="muted">只在本地处理；本页不发任何网络请求。单个文件建议不超过 100 MB。</p>
+      <input id="fileInput" type="file" accept=".gcfx,.sgcfx" hidden />
+      <button class="primary" id="pickBtn" type="button">选择文件</button>
+      <button class="ghost" id="demoBtn" type="button">用演示数据看完整界面</button>
+      <button class="ghost" id="clearBtn" type="button">清空</button>
+    </div>
+    <div id="status" style="margin-top:12px"></div>
+    <div id="fileMeta" class="muted"></div>
+  </div>
+
+  <div id="result" style="display:none">
+    <div class="card">
+      <h2 style="margin-top:0">解析结果</h2>
+      <div id="containerInfo"></div>
+      <div id="projectInfo"></div>
+      <div id="validation"></div>
+      <div id="entriesWrap" style="display:none">
+        <h2>内部文件清单（ZIP 解压结果）</h2>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>文件名</th><th class="num">大小</th><th>类型</th><th>解析状态</th></tr></thead>
+          <tbody id="entriesBody"></tbody>
+        </table></div>
+      </div>
+      <div id="stringsWrap" style="display:none">
+        <h2>可读文本片段（专有二进制格式的兜底展示）</h2>
+        <p class="muted">下面是从文件二进制中提取的可读字符串，仅用于判断文件内容，不代表已解析出结构化数据。</p>
+        <div class="mono" id="stringsBox"></div>
+      </div>
+      <div id="previewWrap" style="display:none">
+        <h2>可读文本预览（未解析出结构化数据）</h2>
+        <div class="mono" id="previewBox"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <input id="search" type="search" placeholder="在当前页签里按关键字搜索（编码、名称、单位）" />
+        <select id="unitFilter" style="display:none;padding:8px 10px;border:1px solid var(--line);border-radius:8px"></select>
+        <button class="ghost" id="exportBtn" type="button">导出当前页签为 CSV</button>
+        <span id="tabCount" class="muted"></span>
+      </div>
+      <div class="tabs" id="tabs"></div>
+      <div style="overflow-x:auto"><table id="dataTable"></table></div>
+      <p id="tabNote" class="muted"></p>
+    </div>
+  </div>
+</main>
+<script type="module">
+import { detectContainer, extractStrings, tryParseText, unzipEntries, sumAmount, parseGcfxUnits } from './gcfx-parse.js';
+
+const $ = (id) => document.getElementById(id);
+let currentTab = 'summary';
+let data = null; // { mode:'file'|'demo', project, summary, boq, resources, fees, fileSummaryAmount, units }
+let unitFilter = 'all';
+let entries = [];
+
+const DEMO = (() => {
+  const boq = [
+    { code: '010101001001', name: '土方开挖', unit: 'm³', qty: 1000, price: 18.5, amount: 18500 },
+    { code: '010401001001', name: 'C30 混凝土垫层', unit: 'm³', qty: 120, price: 420, amount: 50400 },
+    { code: '010501001001', name: '钢筋制作安装', unit: 't', qty: 45, price: 5200, amount: 234000 },
+    { code: '010302001001', name: '砖砌体', unit: 'm³', qty: 80, price: 380, amount: 30400 },
+    { code: '010701001001', name: '防水卷材', unit: '㎡', qty: 600, price: 65, amount: 39000 },
+    { code: '010601001001', name: '模板', unit: '㎡', qty: 900, price: 48, amount: 43200 },
+    { code: '010601002001', name: '脚手架', unit: '㎡', qty: 1500, price: 22, amount: 33000 },
+    { code: '010801001001', name: '给水管安装', unit: 'm', qty: 300, price: 95, amount: 28500 },
+  ];
+  const subtotal = sumAmount(boq); // 477000
+  const measure = Math.round(subtotal * 0.06 * 100) / 100;
+  const fee = Math.round(subtotal * 0.02 * 100) / 100;
+  const tax = Math.round((subtotal + measure + fee) * 0.09 * 100) / 100;
+  return {
+    mode: 'demo',
+    project: { '项目名称': '演示项目：某污水处理厂土建工程（示例）', '来源': '内置演示数据，不是用户上传的文件' },
+    summary: [
+      { item: '分部分项合计', amount: subtotal, note: '清单合价合计' },
+      { item: '措施费（演示比例 6%）', amount: measure, note: '演示数据' },
+      { item: '规费（演示比例 2%）', amount: fee, note: '演示数据' },
+      { item: '税金（演示比例 9%）', amount: tax, note: '（分部分项 + 措施 + 规费）× 9%' },
+      { item: '总价', amount: subtotal + measure + fee + tax, note: '演示数据合计' },
+    ],
+    boq,
+    resources: [
+      { code: '人工', name: '人工工日', unit: '工日', qty: 850, price: 180, amount: 153000 },
+      { code: '材料', name: '水泥 42.5', unit: 't', qty: 120, price: 480, amount: 57600 },
+      { code: '材料', name: '钢筋 HRB400', unit: 't', qty: 45, price: 4100, amount: 184500 },
+      { code: '材料', name: 'C30 商品砼', unit: 'm³', qty: 130, price: 430, amount: 55900 },
+      { code: '机械', name: '挖掘机台班', unit: '台班', qty: 40, price: 1200, amount: 48000 },
+    ],
+    fees: [
+      { item: '分部分项合计', amount: subtotal, note: '清单合价合计' },
+      { item: '措施费', amount: measure, note: '演示比例 6%' },
+      { item: '规费', amount: fee, note: '演示比例 2%' },
+      { item: '税金', amount: tax, note: '税率 9%' },
+      { item: '总价', amount: subtotal + measure + fee + tax, note: '演示数据合计' },
+    ],
+    fileSummaryAmount: null,
+  };
+})();
+
+function fmtMoney(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  return Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtQty(v) { return (v === null || v === undefined || v === '') ? '—' : String(v); }
+function showStatus(html, cls) {
+  $('status').innerHTML = `<div class="note ${cls || ''}">${html}</div>`;
+}
+function setTab(tab) { currentTab = tab; renderTabs(); renderTable(); }
+function renderTabs() {
+  const tabs = [['summary', '报价汇总'], ['boq', '清单明细'], ['resources', '人材机'], ['fees', '费用汇总']];
+  $('tabs').innerHTML = tabs.map(([id, label]) =>
+    `<button type="button" class="${id === currentTab ? 'active' : ''}" data-tab="${id}">${label}</button>`).join('');
+  document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
+}
+function rowsForTab() {
+  if (!data) return [];
+  if (currentTab === 'boq') {
+    if (data.units && unitFilter !== 'all') return data.boq.filter((r) => r.unitDir === unitFilter);
+    return data.boq;
+  }
+  if (currentTab === 'resources') {
+    if (data.units && unitFilter !== 'all') return data.resources.filter((r) => r.unitDir === unitFilter);
+    return data.resources;
+  }
+  if (currentTab === 'fees') return data.fees;
+  return data.summary;
+}
+function renderUnitFilter() {
+  const sel = $('unitFilter');
+  if (!data || !data.units || !data.units.length) { sel.style.display = 'none'; unitFilter = 'all'; return; }
+  sel.style.display = 'inline-block';
+  const cur = sel.value || 'all';
+  sel.innerHTML = `<option value="all">全部单位工程（${data.units.length} 个）</option>` + data.units.map((u) =>
+    `<option value="${u.dir}" ${u.dir === cur ? 'selected' : ''}>单位工程 0/${u.dir}（${u.boq.length} 行，合计 ${fmtMoney(u.boqTotal)} 元）</option>`).join('');
+  unitFilter = sel.value;
+}
+function renderTable() {
+  const q = ($('search').value || '').trim().toLowerCase();
+  let rows = rowsForTab();
+  const all = rows.length;
+  if (q) rows = rows.filter((r) => JSON.stringify(r).toLowerCase().includes(q));
+  $('tabCount').textContent = `当前页签 ${rows.length} / ${all} 条`;
+  let head = '';
+  let body = '';
+  if (currentTab === 'boq' || currentTab === 'resources') {
+    const fileMode = data.mode === 'file' && data.units;
+    const qtySrcLabel = (r) => r.qtySource === 'pair' ? '直接双精度对' : r.qtySource === 'pair_far' ? '远端双精度对确认' : r.qtySource === 'derived' ? '反推（合价÷单价）' : r.qty === null ? '未解析' : '—';
+    if (currentTab === 'boq' && fileMode) {
+      head = '<tr><th>单位工程</th><th>编码</th><th>名称</th><th>单位</th><th class="num">数量</th><th class="num">单价（元）</th><th class="num">合价（元）</th><th>数量来源</th></tr>';
+      body = rows.map((r) => `<tr><td>0/${r.unitDir || '—'}</td><td>${r.code || '—'}</td><td>${r.name || '—'}</td><td>${r.unit || '—'}</td><td class="num">${fmtQty(r.qty)}</td><td class="num">${fmtMoney(r.price)}</td><td class="num">${fmtMoney(r.amount)}</td><td>${qtySrcLabel(r)}</td></tr>`).join('');
+      if (rows.length) body += `<tr><td colspan="6"><strong>当前筛选清单合价合计（按行合价加总）</strong></td><td class="num"><strong>${fmtMoney(sumAmount(rows))}</strong></td><td></td></tr>`;
+    } else {
+      head = '<tr><th>编码 / 类别</th><th>名称</th><th>单位</th><th class="num">数量</th><th class="num">单价（元）</th><th class="num">合价（元）</th></tr>';
+      body = rows.map((r) => `<tr><td>${r.code || '—'}</td><td>${r.name || '—'}</td><td>${r.unit || '—'}</td><td class="num">${fmtQty(r.qty)}</td><td class="num">${fmtMoney(r.price)}</td><td class="num">${fmtMoney(r.amount)}</td></tr>`).join('');
+      if (currentTab === 'boq' && rows.length) {
+        body += `<tr><td colspan="5"><strong>本页清单合价合计（按行合价加总）</strong></td><td class="num"><strong>${fmtMoney(sumAmount(rows))}</strong></td></tr>`;
+      }
+    }
+  } else {
+    head = '<tr><th>项目</th><th class="num">金额（元）</th><th>说明</th></tr>';
+    body = rows.map((r) => `<tr><td>${r.item}</td><td class="num">${fmtMoney(r.amount)}</td><td>${r.note || ''}</td></tr>`).join('');
+  }
+  $('dataTable').innerHTML = `<thead>${head}</thead><tbody>${body || '<tr><td colspan="8">暂无数据。解析不到的字段留空，不编造。</td></tr>'}</tbody>`;
+  const notes = {
+    summary: data.mode === 'demo' ? '演示数据的报价汇总，金额由演示清单按演示比例算出。' : data.units ? '报价汇总来自文件中各单位工程费用表（3003/3010）的合计；单位工程只按文件内目录编号（0/xx）区分，未从文件中确认单位工程名称，故不按名称展示。' : '报价汇总只展示从文件中解析到的项目；未解析到的金额不在此表内。',
+    boq: data.units ? '清单明细来自 3003 表：编码、名称、单位、单价、合价为直接解析；数量来源列标注了每行的数量判定方式——“反推”行表示数量由合价÷单价算出、未在行首直接读到双精度值，请以原软件为准。措施项目单项明细、定额子目尚未稳定映射，不在本页展示。' : '清单明细只展示从文件中解析到的行；单价 × 数量与合价不一致的行请以原计价软件为准。',
+    resources: data.mode === 'demo' ? '演示数据的人材机明细。' : data.units ? '人材机本页只展示从 3007 表内嵌价格信息（JSON）提取到的材料名称、单位、价格条目（去重后），不含数量与合价、不计入任何合计；完整人材机数量/合价映射尚未稳定，暂不展示，请以原软件为准。' : '人材机明细只在文件中解析到相应结构时才有数据；未解析到时本页为空，不是从清单反推的。',
+    fees: data.mode === 'demo' ? '演示数据的费用汇总。' : data.units ? '费用汇总来自各单位工程费用表（3010）：每单位 6 项（分部分项、措施项目、安全生产措施费、税前合计、增值税、总价），并满足分部分项+措施=税前、税前+增值税=总价；合计行为各单位相加。' : '费用汇总只展示从文件中解析到的费用项；未解析到时本页为空，不用清单合计推算税费。',
+  };
+  $('tabNote').textContent = notes[currentTab];
+}
+function renderResult() {
+  $('result').style.display = 'block';
+  renderUnitFilter();
+  $('projectInfo').innerHTML = data.project && Object.keys(data.project).length
+    ? `<p><strong>项目基本信息（仅展示文件中读到的项）：</strong><br />${Object.entries(data.project).map(([k, v]) => `${k}：${v}`).join('<br />')}</p>`
+    : '<p class="muted">项目基本信息：文件中未解析到可确认的项目名称、单位等信息，已留空。</p>';
+  const boqSum = sumAmount(data.boq || []);
+  let vHtml = `<p>清单合价合计（按解析到的清单行加总）：<strong>${fmtMoney(boqSum)}</strong> 元。</p>`;
+  if (data.units && data.units.length) {
+    const badUnits = data.units.filter((u) => u.boqDiff !== 0 || !u.feeConsistent);
+    const derived = data.boq.filter((r) => r.qtySource === 'derived').length;
+    const unresolved = data.boq.filter((r) => r.qty === null).length;
+    if (!badUnits.length) {
+      vHtml += `<div class="note">单位工程逐个校验通过：${data.units.length} 个单位工程的清单合计与各自费用表分部分项合计逐个核对，差额均为 0.00 元；费用表内部分部分项 + 措施 = 税前、税前 + 增值税 = 总价均成立。</div>`;
+    } else {
+      vHtml += `<div class="note bad"><strong>单位工程校验报警：</strong>以下单位工程清单合计与费用表不一致：${badUnits.map((u) => `0/${u.dir} 差额 ${fmtMoney(u.boqDiff)} 元`).join('；')}。请以原计价软件为准。</div>`;
+    }
+    if (derived) vHtml += `<p class="muted">数量“反推”行 ${derived} 行：数量由合价 ÷ 单价算出，未在行首直接读到双精度值，页面已在数量来源列标注。</p>`;
+    if (unresolved) vHtml += `<p class="muted">数量未解析行 ${unresolved} 行：数量留空，不填合价 ÷ 单价的推算值。</p>`;
+  }
+  if (data.fileSummaryAmount !== null && data.fileSummaryAmount !== undefined) {
+    const diff = Math.round((boqSum - data.fileSummaryAmount) * 100) / 100;
+    if (Math.abs(diff) < 0.01) {
+      vHtml += '<div class="note">金额校验通过：清单合价合计与文件汇总金额一致。</div>';
+    } else {
+      vHtml += `<div class="note bad"><strong>金额校验报警：</strong>清单合价合计 ${fmtMoney(boqSum)} 元与文件汇总金额 ${fmtMoney(data.fileSummaryAmount)} 元不一致，差额 ${fmtMoney(diff)} 元。请以原计价软件为准，检查是否有未解析的清单行或费用项。</div>`;
+    }
+  } else {
+    vHtml += '<p class="muted">未读到文件自身的汇总金额，本次只以清单合计为准，未做“清单合计 vs 文件汇总”的对比校验。</p>';
+  }
+  $('validation').innerHTML = vHtml;
+  renderTabs(); renderTable();
+}
+function downloadCsv(filename, text) {
+  const blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function escCsv(v) { return `"${String(v ?? '').replaceAll('"', '""')}"`; }
+
+async function handleFile(file) {
+  entries = [];
+  $('entriesWrap').style.display = 'none';
+  $('stringsWrap').style.display = 'none';
+  $('previewWrap').style.display = 'none';
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext !== 'gcfx' && ext !== 'sgcfx') {
+    showStatus('只接受 .GCFX / .SGCFX 文件。请重新选择正确后缀的文件。', 'bad');
+    $('result').style.display = 'none';
+    return;
+  }
+  $('fileMeta').textContent = `文件：${file.name}（${file.size.toLocaleString()} 字节，最后修改 ${new Date(file.lastModified).toLocaleString('zh-CN')}）`;
+  if (file.size === 0) {
+    showStatus('文件为空（0 字节），没有可解析内容。请换一个有效文件。', 'bad');
+    $('result').style.display = 'none';
+    return;
+  }
+  if (file.size > 100 * 1024 * 1024) {
+    showStatus('文件超过 100 MB，浏览器本地解析可能很慢或内存不足。建议先用脱敏后的小样例文件验证。', 'warn');
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const container = detectContainer(bytes);
+  $('containerInfo').innerHTML = `<p><strong>文件容器识别：</strong>${container.label}</p><p class="muted">${container.detail}</p>`;
+  let parsed = { info: {}, boq: [], feeText: null };
+  let decodedText = '';
+  if (container.type === 'zip') {
+    try {
+      entries = unzipEntries(bytes, window.fflate.unzipSync);
+    } catch (e) {
+      showStatus(`解压失败：${e.message || e}。该文件可能是加密、压缩方式特殊或专有格式的 ZIP 容器，本页不再猜测其结构，下面改用可读字符串兜底展示。`, 'bad');
+      $('stringsWrap').style.display = 'block';
+      $('stringsBox').textContent = extractStrings(bytes, 120).join('\n') || '未提取到可读字符串。';
+      data = { mode: 'file', project: {}, summary: [], boq: [], resources: [], fees: [], fileSummaryAmount: null };
+      renderResult(); return;
+    }
+    $('entriesWrap').style.display = 'block';
+    // 先试 GCFX 二进制单位工程表（3003 清单 + 3010 费用），命中则走结构化分支。
+    let gcfx = null;
+    try { gcfx = parseGcfxUnits(entries); } catch { gcfx = null; }
+    const textEntries = entries.filter((en) => en.kind !== '其他' && en.size < 5 * 1024 * 1024);
+    const statuses = [];
+    for (const en of entries) {
+      let st = '未解析（非文本或过大）';
+      const gm = en.name.match(/^0\/(\d+)\/(3003|3010|3007)$/);
+      if (gm && gcfx && gcfx.units.some((u) => u.dir === gm[1])) {
+        const u = gcfx.units.find((x) => x.dir === gm[1]);
+        st = gm[2] === '3003' ? `已解析：分部分项清单 ${u.boq.length} 行` : gm[2] === '3010' ? '已解析：费用汇总 6 项' : `已提取价格信息 ${u.materials.length} 条（不含数量/合价）`;
+      } else if (textEntries.includes(en)) {
+        const text = new TextDecoder('utf-8', { fatal: false }).decode(en.data);
+        const p = tryParseText(text);
+        if (Object.keys(p.info).length) parsed.info = { ...parsed.info, ...p.info };
+        if (p.boq.length && !parsed.boq.length) parsed.boq = p.boq;
+        if (p.feeText) parsed.feeText = p.feeText;
+        decodedText = text;
+        st = p.boq.length ? `已解析出 ${p.boq.length} 行结构化数据` : '已读取文本，未解析出结构化行';
+      }
+      statuses.push({ name: en.name, size: en.size, kind: en.kind, st });
+    }
+    $('entriesBody').innerHTML = statuses.map((s) =>
+      `<tr><td>${s.name}</td><td class="num">${s.size.toLocaleString()}</td><td>${s.kind}</td><td>${s.st}</td></tr>`).join('');
+    if (gcfx && gcfx.units.length) {
+      const t = gcfx.totals;
+      const resources = [];
+      for (const u of gcfx.units) for (const m of u.materials) resources.push({ code: '', name: m.name, unit: m.unit, qty: null, price: m.price, amount: null, unitDir: u.dir });
+      const fees = [];
+      for (const u of gcfx.units) {
+        if (!u.fee) continue;
+        fees.push(
+          { item: `单位工程 0/${u.dir} — 分部分项合计`, amount: u.fee.boq, note: '费用表 3010' },
+          { item: `单位工程 0/${u.dir} — 措施项目合计`, amount: u.fee.measures, note: '费用表 3010' },
+          { item: `单位工程 0/${u.dir} — 其中安全生产措施费`, amount: u.fee.safety, note: '费用表 3010，已含于措施项目合计内，不另加' },
+          { item: `单位工程 0/${u.dir} — 税前合计`, amount: u.fee.taxBase, note: '分部分项 + 措施' },
+          { item: `单位工程 0/${u.dir} — 增值税`, amount: u.fee.vat, note: '税前合计 × 9%（费用表值）' },
+          { item: `单位工程 0/${u.dir} — 总价`, amount: u.fee.total, note: '税前合计 + 增值税' },
+        );
+      }
+      fees.push(
+        { item: '合计 — 分部分项', amount: t.boq, note: '各单位工程相加' },
+        { item: '合计 — 措施项目', amount: t.measures, note: '各单位工程相加' },
+        { item: '合计 — 其中安全生产措施费', amount: t.safety, note: '各单位工程相加，已含于措施项目合计内，不另加' },
+        { item: '合计 — 税前合计', amount: t.taxBase, note: '各单位工程相加' },
+        { item: '合计 — 增值税', amount: t.vat, note: '各单位工程相加' },
+        { item: '合计 — 总价', amount: t.total, note: '各单位工程相加' },
+      );
+      data = {
+        mode: 'file', project: parsed.info, units: gcfx.units, boq: gcfx.boqRowsAll, resources, fees,
+        summary: [
+          { item: '分部分项合计（各单位工程相加）', amount: t.boq, note: `清单行 ${gcfx.boqRowsAll.length} 行，合计 ${fmtMoney(gcfx.boqSum)} 元，差额 ${fmtMoney(gcfx.boqDiff)} 元` },
+          { item: '措施项目合计（各单位工程相加）', amount: t.measures, note: '费用表 3010 各单位相加' },
+          { item: '其中：安全生产措施费', amount: t.safety, note: '费用表 3010 各单位相加，已含于措施项目合计内，不另加' },
+          { item: '税前合计（各单位工程相加）', amount: t.taxBase, note: '分部分项 + 措施' },
+          { item: '增值税（各单位工程相加）', amount: t.vat, note: '费用表值，税率 9%' },
+          { item: '总价（各单位工程相加）', amount: t.total, note: '税前合计 + 增值税' },
+          ...gcfx.units.map((u) => ({ item: `单位工程 0/${u.dir} 总价`, amount: u.fee ? u.fee.total : null, note: `清单 ${u.boq.length} 行` })),
+        ],
+        fileSummaryAmount: t.total,
+      };
+      showStatus(`已解析 GCFX 单位工程结构：${gcfx.units.length} 个单位工程，清单 ${gcfx.boqRowsAll.length} 行。报价汇总、清单明细、费用汇总均为文件中直接解析的值；人材机仅含价格信息条目，不计入合计。`);
+      renderResult(); return;
+    }
+    if (!parsed.boq.length) {
+      showStatus('已列出内部文件清单，但未从中解析出清单结构化数据。请点“用演示数据看完整界面”看四个页签的完整形态，或提供真实样例文件做下一步对齐。', 'warn');
+      $('previewWrap').style.display = 'block';
+      $('previewBox').textContent = decodedText.slice(0, 3000) || '内部文本文件为空或不可读。';
+    }
+  } else if (container.type === 'xml' || container.type === 'json' || container.type === 'text') {
+    decodedText = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    parsed = tryParseText(decodedText);
+    if (!parsed.boq.length) {
+      showStatus('文件可读，但未解析出清单结构化数据。下面展示文本预览，金额不编造。', 'warn');
+      $('previewWrap').style.display = 'block';
+      $('previewBox').textContent = decodedText.slice(0, 3000);
+    }
+  } else {
+    showStatus('暂不支持该内部格式：文件为未识别的二进制专有格式，已列出文件结构与可读文本，不猜测金额。点“用演示数据看完整界面”可看四个页签的完整形态。', 'bad');
+    $('stringsWrap').style.display = 'block';
+    $('stringsBox').textContent = extractStrings(bytes, 120).join('\n') || '未提取到可读字符串。';
+  }
+  data = {
+    mode: 'file',
+    project: parsed.info,
+    summary: parsed.boq.length ? [{ item: '清单合价合计（按解析行加总）', amount: sumAmount(parsed.boq), note: '文件汇总金额未单独读到时，本项即为清单合计' }] : [],
+    boq: parsed.boq,
+    resources: [],
+    fees: parsed.feeText ? [{ item: parsed.feeText, amount: null, note: '从文件中读到的费用文本，未做金额拆分' }] : [],
+    fileSummaryAmount: null,
+  };
+  if (parsed.boq.length) showStatus('已解析出清单结构化数据。人材机与费用汇总如为空，说明文件中未解析到相应结构，不是从清单反推的。');
+  renderResult();
+}
+
+$('pickBtn').addEventListener('click', () => $('fileInput').click());
+$('drop').addEventListener('click', (e) => {
+  // 拖拽区内的三个按钮各有自己的处理，点击它们时不要冒泡触发文件选择。
+  if (['pickBtn', 'demoBtn', 'clearBtn', 'fileInput'].includes(e.target.id)) return;
+  $('fileInput').click();
+});
+$('drop').addEventListener('dragover', (e) => { e.preventDefault(); $('drop').classList.add('over'); });
+$('drop').addEventListener('dragleave', () => $('drop').classList.remove('over'));
+$('drop').addEventListener('drop', (e) => {
+  e.preventDefault(); $('drop').classList.remove('over');
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+$('fileInput').addEventListener('change', () => { if ($('fileInput').files[0]) handleFile($('fileInput').files[0]); });
+$('demoBtn').addEventListener('click', () => {
+  data = DEMO; currentTab = 'summary';
+  showStatus('<strong>当前为演示数据，不是你上传的文件。</strong>演示项目用于展示报价汇总、清单明细、人材机、费用汇总四个页签的完整界面，金额按演示清单与演示比例算出。', 'demo');
+  $('fileMeta').textContent = '演示数据：某污水处理厂土建工程（示例），清单 8 行，分部分项合计 477,000.00 元，总价 561,524.40 元。';
+  $('entriesWrap').style.display = 'none'; $('stringsWrap').style.display = 'none'; $('previewWrap').style.display = 'none';
+  $('containerInfo').innerHTML = '<p><strong>数据来源：</strong>内置演示数据（演示模式）。</p>';
+  renderResult();
+});
+$('clearBtn').addEventListener('click', () => {
+  data = null; entries = []; $('fileInput').value = ''; $('result').style.display = 'none';
+  $('status').innerHTML = ''; $('fileMeta').textContent = '';
+  $('entriesWrap').style.display = 'none'; $('stringsWrap').style.display = 'none'; $('previewWrap').style.display = 'none';
+});
+$('search').addEventListener('input', renderTable);
+$('unitFilter').addEventListener('change', (e) => { unitFilter = e.target.value; renderTable(); });
+$('exportBtn').addEventListener('click', () => {
+  if (!data) { alert('先上传文件或点演示数据。'); return; }
+  const rows = rowsForTab();
+  if (!rows.length) { alert('当前页签没有数据可导出。'); return; }
+  let head, lines;
+  if (currentTab === 'boq' && data.mode === 'file' && data.units) {
+    head = ['单位工程', '编码', '名称', '单位', '数量', '单价(元)', '合价(元)', '数量来源'];
+    lines = rows.map((r) => [`0/${r.unitDir || ''}`, r.code, r.name, r.unit, r.qty, r.price, r.amount, r.qtySource || ''].map(escCsv).join(','));
+  } else if (currentTab === 'boq' || currentTab === 'resources') {
+    head = ['编码/类别', '名称', '单位', '数量', '单价(元)', '合价(元)'];
+    lines = rows.map((r) => [r.code, r.name, r.unit, r.qty, r.price, r.amount].map(escCsv).join(','));
+  } else {
+    head = ['项目', '金额(元)', '说明'];
+    lines = rows.map((r) => [r.item, r.amount, r.note].map(escCsv).join(','));
+  }
+  downloadCsv(`造价文件查看器-${currentTab}.csv`, [head.map(escCsv).join(','), ...lines].join('\r\n'));
+});
+</script>
+</body>
+</html>

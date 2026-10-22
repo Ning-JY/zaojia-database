@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>工程建设其他费（四川） · 造价工具箱</title>
+<style>
+  :root { --brand: #0f766e; --ink: #0b1c30; --muted: #64748b; --line: #dbe4ef; --bg: #f6f8fb; --card: #fff; --warn-bg: #fffbeb; --warn-line: #f59e0b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.6; }
+  header { background: #0b1c30; color: #fff; padding: 18px 20px; }
+  header a { color: #a2f1e7; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  h2 { font-size: 17px; margin: 26px 0 10px; }
+  h3 { font-size: 15px; margin: 18px 0 8px; }
+  .note { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 12px 14px; }
+  .warn { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px; padding: 12px 14px; }
+  .warn strong { color: #92400e; }
+  .errorbox { display: none; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 12px 14px; color: #991b1b; margin-top: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .row label { display: grid; gap: 4px; color: var(--muted); font-size: 13px; }
+  .row label input, .row label select { color: var(--ink); font-size: 14px; }
+  input, select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+  input[type="number"] { width: 150px; }
+  input[type="text"] { width: 200px; }
+  button.primary { background: var(--brand); color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+  button.ghost { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+  button.danger { background: #fff; border: 1px solid #fecaca; color: #991b1b; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
+  th { color: var(--muted); }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  tr.invalid td { background: #fef2f2; }
+  tr.excluded td.amount { color: var(--muted); }
+  .muted { color: var(--muted); }
+  .tag { display: inline-block; background: #fef3c7; color: #92400e; border-radius: 999px; padding: 0 8px; font-size: 12px; }
+  .total { background: #f8fafc; border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+  .total b { font-size: 16px; }
+  .formula { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #f1f5f9; border-radius: 8px; padding: 8px; white-space: pre-wrap; }
+  @media (max-width: 720px) { table { font-size: 12px; } th, td { padding: 6px 4px; } input[type="number"] { width: 120px; } }
+</style>
+</head>
+<body>
+<header>
+  <a href="./index.html">← 工具箱首页</a>
+  <h1>工程建设其他费（四川）</h1>
+  <p style="margin:0;color:#cbd5e1">按标准费用清单逐项算，费率可改，附预备费与建设期利息，导出 CSV。金额单位：万元。</p>
+</header>
+<main>
+  <div class="warn">
+    <strong>费率声明（请先读）：</strong>本页不提供、不宣称任何“四川现行标准”费率。
+    所有费率、固定金额都由你填写，以项目批复、合同及现行文件为准；本页只负责按你填的口径算对、汇总对。
+    标注 <span class="tag">示例</span> 的数值仅为演示算例、请按文件改，绝不是四川标准；不填费率的项金额按 0 计。
+  </div>
+  <div class="note" style="margin-top:12px">
+    <strong>本地计算：</strong>所有计算只在浏览器本地进行，不上传、不保存、不联网。刷新页面即按默认清单恢复，重要结果请导出 CSV 留存。
+  </div>
+  <div class="errorbox" id="errorBox"></div>
+
+  <h2>1 · 计费基数</h2>
+  <div class="card">
+    <div class="row">
+      <label>建安工程费（万元）<input id="jianan" type="number" min="0" step="0.01" value="" placeholder="请填写" /></label>
+      <label>设备购置费（万元）<input id="equip" type="number" min="0" step="0.01" value="" placeholder="请填写" /></label>
+      <label>工程费用（万元，自动合计）<input id="engFee" type="text" readonly value="0.00" /></label>
+    </div>
+    <p class="muted">工程费用 = 建安工程费 + 设备购置费。下面各费用项的计费基数下拉可选：建安费、工程费用、设备费、固定金额四种。</p>
+    <div class="formula" id="engFormula">工程费用 = 建安工程费 + 设备购置费 = 0.00 + 0.00 = 0.00 万元</div>
+  </div>
+
+  <h2>2 · 费用清单（按标准构成分组，可勾选计入 / 不计入）</h2>
+  <p class="muted">不计入的项金额显示为 0 且不计入合计；费率、固定金额为负数或非数字时会报错，该项不参与合计。</p>
+  <div class="row">
+    <button class="ghost" id="fillExampleBtn" type="button">一键填入示例费率（仅演示，非标准）</button>
+    <button class="ghost" id="clearExampleBtn" type="button">清空示例费率（保留建设单位管理费示例除外，见说明）</button>
+    <span class="muted">“清空示例费率”会把一键填入的示例清空回空白，建设单位管理费的 1% 示例保留，以便你直接验证算例。</span>
+  </div>
+  <div id="feeGroups"></div>
+
+  <h2>3 · 新增自定义费用行</h2>
+  <div class="card">
+    <div class="row">
+      <label>分组<select id="customGroup"><option value="A">A 建设用地费</option><option value="B">B 与项目建设有关的其他费用</option><option value="C">C 与未来生产经营有关的其他费用</option></select></label>
+      <label>费用名称<input id="customName" type="text" placeholder="如：水土保持补偿费" /></label>
+      <label>计费基数<select id="customBase"><option value="eng">工程费用</option><option value="jianan">建安费</option><option value="equip">设备费</option><option value="fixed">固定金额</option></select></label>
+      <label>费率（%）<input id="customRate" type="number" step="0.01" placeholder="固定金额时不填" /></label>
+      <label>固定金额（万元）<input id="customFixed" type="number" min="0" step="0.01" placeholder="固定金额时填" /></label>
+      <button class="primary" id="addCustomBtn" type="button">加入清单</button>
+    </div>
+  </div>
+
+  <h2>4 · 汇总</h2>
+  <div class="card">
+    <div id="groupTotals"></div>
+    <div class="total" id="otherSummary"></div>
+  </div>
+
+  <h2>5 · 预备费</h2>
+  <div class="card">
+    <h3>基本预备费</h3>
+    <div class="row">
+      <label>费率（%）<input id="basicRate" type="number" step="0.01" value="5" /></label>
+      <span class="tag">示例</span><span class="muted">默认 5% 仅为演示算例、请按文件改。</span>
+    </div>
+    <div class="formula" id="basicFormula"></div>
+    <h3>涨价预备费（可选）</h3>
+    <div class="row">
+      <label><input id="priceEnabled" type="checkbox" /> 启用涨价预备费</label>
+      <label>建设期（年）<input id="priceYears" type="number" min="1" max="10" step="1" value="2" /></label>
+      <label>年涨价率（%）<input id="priceRate" type="number" step="0.01" value="3" /></label>
+    </div>
+    <p class="muted">口径说明：按年末提款、每年投资额为你下面填的金额；第 t 年涨价系数 = (1 + 年涨价率)^t − 1；该年涨价预备费 = 该年投资额 × 系数。默认每年投资额按（工程费用 + 其他费用）平均分配，你可逐年改。</p>
+    <div id="priceTableWrap" style="display:none;overflow-x:auto"></div>
+    <div class="formula" id="priceFormula"></div>
+  </div>
+
+  <h2>6 · 建设期利息（可选）</h2>
+  <div class="card">
+    <div class="row">
+      <label><input id="interestEnabled" type="checkbox" /> 启用建设期利息</label>
+      <label>贷款本金（万元）<input id="interestPrincipal" type="number" min="0" step="0.01" value="" placeholder="请填写" /></label>
+      <label>年利率（%）<input id="interestRate" type="number" step="0.01" value="" placeholder="请填写" /></label>
+      <label>建设期（年）<input id="interestYears" type="number" min="1" max="10" step="1" value="2" /></label>
+      <label><input id="interestInclude" type="checkbox" checked /> 计入总投资</label>
+    </div>
+    <p class="muted">口径说明：按“当年利息 =（以前年度累计本息 + 当年提款 ÷ 2）× 年利率”计算，即当年提款按半年计息；每年提款比例默认平均分配，你可逐年改，比例合计应为 100%，合计不是 100% 时会报错且利息不计入总投资。</p>
+    <div id="interestTableWrap" style="display:none;overflow-x:auto"></div>
+    <div class="formula" id="interestFormula"></div>
+  </div>
+
+  <h2>7 · 建设项目总投资</h2>
+  <div class="card">
+    <div id="totalTable"></div>
+    <div class="total" id="totalSummary"></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button class="primary" id="exportBtn" type="button">导出全部明细为 CSV</button>
+      <button class="ghost" id="resetBtn" type="button">恢复默认清单</button>
+      <button class="ghost" id="clearCustomBtn" type="button">清空自定义行</button>
+      <span class="muted">CSV 含分组、基数、费率、金额、计算过程；Excel 打开如中文乱码，选“以 UTF-8 编码导入”。</span>
+    </div>
+  </div>
+</main>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  function fmt(n) { return Number(n).toFixed(2); }
+  function isBad(n) { return typeof n !== 'number' || isNaN(n) || !isFinite(n) || n < 0; }
+  function parseNum(v) {
+    if (v === null || v === undefined || String(v).trim() === '') return 0;
+    var n = Number(v);
+    return n;
+  }
+  function escCsv(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }
+
+  var GROUPS = { A: 'A 建设用地费', B: 'B 与项目建设有关的其他费用', C: 'C 与未来生产经营有关的其他费用' };
+  // rate: null = blank (user must fill); exampleRate: value used by "fill example" button, never presented as a standard.
+  var DEFAULTS = [
+    { group: 'A', name: '土地征用及迁移补偿费', base: 'fixed', rate: null, exampleRate: null, fixed: 0 },
+    { group: 'A', name: '土地使用权出让金', base: 'fixed', rate: null, exampleRate: null, fixed: 0 },
+    { group: 'B', name: '建设单位管理费', base: 'eng', rate: 1, exampleRate: 1, fixed: 0 },
+    { group: 'B', name: '工程监理费', base: 'eng', rate: null, exampleRate: 1.5, fixed: 0 },
+    { group: 'B', name: '可行性研究费', base: 'eng', rate: null, exampleRate: 0.3, fixed: 0 },
+    { group: 'B', name: '研究试验费', base: 'eng', rate: null, exampleRate: 0.2, fixed: 0 },
+    { group: 'B', name: '勘察设计费', base: 'eng', rate: null, exampleRate: 2, fixed: 0 },
+    { group: 'B', name: '环境影响评价费', base: 'eng', rate: null, exampleRate: 0.2, fixed: 0 },
+    { group: 'B', name: '劳动安全卫生评价费', base: 'eng', rate: null, exampleRate: 0.1, fixed: 0 },
+    { group: 'B', name: '场地准备及临时设施费', base: 'eng', rate: null, exampleRate: 1, fixed: 0 },
+    { group: 'B', name: '引进技术和设备其他费', base: 'equip', rate: null, exampleRate: 0.5, fixed: 0 },
+    { group: 'B', name: '工程保险费', base: 'eng', rate: null, exampleRate: 0.3, fixed: 0 },
+    { group: 'B', name: '联合试运转费', base: 'eng', rate: null, exampleRate: 0.5, fixed: 0 },
+    { group: 'B', name: '特殊设备安全监督检验费', base: 'equip', rate: null, exampleRate: 0.2, fixed: 0 },
+    { group: 'B', name: '市政公用设施费', base: 'eng', rate: null, exampleRate: 0.5, fixed: 0 },
+    { group: 'C', name: '专利及专有技术使用费', base: 'fixed', rate: null, exampleRate: null, fixed: 0 },
+    { group: 'C', name: '生产准备费', base: 'eng', rate: null, exampleRate: 0.5, fixed: 0 },
+    { group: 'C', name: '办公和生活家具购置费', base: 'fixed', rate: null, exampleRate: null, fixed: 0 }
+  ];
+  var items = [];
+  var nextId = 1;
+  function cloneDefaults() {
+    items = DEFAULTS.map(function (d) {
+      return { id: nextId++, group: d.group, name: d.name, base: d.base, rate: d.rate, exampleRate: d.exampleRate, fixed: d.fixed, include: true, custom: false };
+    });
+  }
+  function baseLabel(k) {
+    return k === 'eng' ? '工程费用' : k === 'jianan' ? '建安费' : k === 'equip' ? '设备费' : '固定金额';
+  }
+  function baseOptions(selected) {
+    return ['eng', 'jianan', 'equip', 'fixed'].map(function (k) {
+      return '<option value="' + k + '"' + (k === selected ? ' selected' : '') + '>' + baseLabel(k) + '</option>';
+    }).join('');
+  }
+
+  function renderFees() {
+    var html = '';
+    ['A', 'B', 'C'].forEach(function (g) {
+      var list = items.filter(function (it) { return it.group === g; });
+      html += '<div class="card"><h3>' + GROUPS[g] + '</h3><div style="overflow-x:auto"><table><thead><tr><th>计入</th><th>费用名称</th><th>计费基数</th><th class="num">基数（万元）</th><th>费率（%）</th><th class="num">固定金额（万元）</th><th class="num">金额（万元）</th><th>计算过程</th><th></th></tr></thead><tbody>';
+      list.forEach(function (it) {
+        var isFixed = it.base === 'fixed';
+        html += '<tr data-row="' + it.id + '">' +
+          '<td><input type="checkbox" data-field="include" ' + (it.include ? 'checked' : '') + ' /></td>' +
+          '<td>' + it.name + (it.custom ? '（自定义）' : '') + '</td>' +
+          '<td><select data-field="base">' + baseOptions(it.base) + '</select></td>' +
+          '<td class="num" data-cell="baseAmount">—</td>' +
+          '<td><input type="number" step="0.01" data-field="rate" value="' + (it.rate === null || it.rate === undefined ? '' : it.rate) + '" placeholder="请填写" ' + (isFixed ? 'disabled' : '') + ' />' +
+          (it.rate !== null && it.rate !== undefined && it.name === '建设单位管理费' ? ' <span class="tag">示例</span>' : '') + '</td>' +
+          '<td class="num"><input type="number" min="0" step="0.01" data-field="fixed" value="' + it.fixed + '" ' + (isFixed ? '' : 'disabled') + ' /></td>' +
+          '<td class="num amount" data-cell="amount">0.00</td>' +
+          '<td data-cell="process">—</td>' +
+          '<td>' + (it.custom ? '<button class="danger" type="button" data-del="' + it.id + '">删除</button>' : '') + '</td></tr>';
+      });
+      html += '</tbody></table></div><div class="total" data-group-total="' + g + '"></div></div>';
+    });
+    $('feeGroups').innerHTML = html;
+    // Wire base-select changes: toggle rate/fixed inputs, then recalc.
+    document.querySelectorAll('[data-row] select[data-field="base"]').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        var row = sel.closest('tr');
+        var isFixed = sel.value === 'fixed';
+        row.querySelector('[data-field="rate"]').disabled = isFixed;
+        row.querySelector('[data-field="fixed"]').disabled = !isFixed;
+        calc();
+      });
+    });
+    document.querySelectorAll('[data-del]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        items = items.filter(function (it) { return it.id !== Number(btn.getAttribute('data-del')); });
+        renderFees(); calc();
+      });
+    });
+  }
+
+  var priceRowsCache = null, interestRowsCache = null;
+  function renderPriceRows(engPlusOther) {
+    var years = parseInt($('priceYears').value, 10);
+    if (!(years >= 1 && years <= 10)) years = 2;
+    var amounts = [];
+    if (priceRowsCache && priceRowsCache.length === years) {
+      amounts = priceRowsCache;
+    } else {
+      var each = engPlusOther / years;
+      for (var i = 0; i < years; i++) amounts.push(each);
+    }
+    priceRowsCache = amounts;
+    var rows = amounts.map(function (amt, i) {
+      return '<tr data-price-year="' + (i + 1) + '"><td>第 ' + (i + 1) + ' 年</td><td><input type="number" min="0" step="0.01" data-price-amount value="' + fmt(amt) + '" /></td><td data-price-coef>—</td><td class="num" data-price-amount2>0.00</td></tr>';
+    }).join('');
+    $('priceTableWrap').innerHTML = '<table><thead><tr><th>年度</th><th>该年投资额（万元）</th><th>涨价系数</th><th class="num">涨价预备费（万元）</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    $('priceTableWrap').style.display = 'block';
+  }
+  function renderInterestRows() {
+    var years = parseInt($('interestYears').value, 10);
+    if (!(years >= 1 && years <= 10)) years = 2;
+    var pcts = [];
+    if (interestRowsCache && interestRowsCache.length === years) {
+      pcts = interestRowsCache;
+    } else {
+      for (var i = 0; i < years; i++) pcts.push(100 / years);
+    }
+    interestRowsCache = pcts;
+    var rows = pcts.map(function (p, i) {
+      return '<tr data-interest-year="' + (i + 1) + '"><td>第 ' + (i + 1) + ' 年</td><td><input type="number" min="0" step="0.01" data-interest-pct value="' + fmt(p) + '" /></td><td class="num" data-interest-draw>0.00</td><td class="num" data-interest-year-interest>0.00</td><td class="num" data-interest-cum>0.00</td></tr>';
+    }).join('');
+    $('interestTableWrap').innerHTML = '<table><thead><tr><th>年度</th><th>提款比例（%）</th><th class="num">提款额（万元）</th><th class="num">当年利息（万元）</th><th class="num">累计本息（万元）</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    $('interestTableWrap').style.display = 'block';
+  }
+
+  var lastCalc = null;
+  function calc() {
+    var errors = [];
+    var jiananRaw = $('jianan').value, equipRaw = $('equip').value;
+    var jianan = parseNum(jiananRaw), equip = parseNum(equipRaw);
+    if (jiananRaw !== '' && isBad(jianan)) errors.push('建安工程费不能为负数或非数字，该项不参与合计。');
+    if (equipRaw !== '' && isBad(equip)) errors.push('设备购置费不能为负数或非数字，该项不参与合计。');
+    if (isBad(jianan)) jianan = 0;
+    if (isBad(equip)) equip = 0;
+    var eng = jianan + equip;
+    $('engFee').value = fmt(eng);
+    $('engFormula').textContent = '工程费用 = 建安工程费 + 设备购置费 = ' + fmt(jianan) + ' + ' + fmt(equip) + ' = ' + fmt(eng) + ' 万元';
+
+    var bases = { jianan: jianan, equip: equip, eng: eng };
+    var groupTotals = { A: 0, B: 0, C: 0 };
+    var detailRows = [];
+    document.querySelectorAll('[data-row]').forEach(function (row) {
+      var id = Number(row.getAttribute('data-row'));
+      var it = null;
+      for (var i = 0; i < items.length; i++) if (items[i].id === id) it = items[i];
+      if (!it) return;
+      it.include = row.querySelector('[data-field="include"]').checked;
+      it.base = row.querySelector('[data-field="base"]').value;
+      var rateEl = row.querySelector('[data-field="rate"]');
+      var fixedEl = row.querySelector('[data-field="fixed"]');
+      it.rate = rateEl.value === '' ? null : Number(rateEl.value);
+      it.fixed = fixedEl.value === '' ? 0 : Number(fixedEl.value);
+      var baseAmount = it.base === 'fixed' ? 0 : bases[it.base];
+      row.querySelector('[data-cell="baseAmount"]').textContent = it.base === 'fixed' ? '—（固定金额）' : fmt(baseAmount);
+      var amount = 0, process = '', valid = true;
+      if (!it.include) {
+        amount = 0; process = '不计入，金额计 0。';
+        row.classList.add('excluded');
+      } else if (it.base === 'fixed') {
+        if (isBad(it.fixed)) { errors.push(it.name + '：固定金额不能为负数或非数字，该项不参与合计。'); valid = false; }
+        else { amount = it.fixed; process = '固定金额 = ' + fmt(amount) + ' 万元'; }
+        row.classList.remove('excluded');
+      } else {
+        if (it.rate === null || it.rate === undefined) { amount = 0; process = '未填费率，金额按 0 计；请按批复、合同或现行文件填写费率。'; }
+        else if (isBad(it.rate)) { errors.push(it.name + '：费率不能为负数或非数字，该项不参与合计。'); valid = false; }
+        else { amount = baseAmount * it.rate / 100; process = '基数 ' + fmt(baseAmount) + ' 万元 × 费率 ' + it.rate + '% = ' + fmt(amount) + ' 万元'; }
+        row.classList.remove('excluded');
+      }
+      if (!valid) { amount = 0; process = '输入无效，该项不参与合计，请修正后重算。'; row.classList.add('invalid'); }
+      else { row.classList.remove('invalid'); }
+      row.querySelector('[data-cell="amount"]').textContent = fmt(amount);
+      row.querySelector('[data-cell="process"]').textContent = process;
+      if (it.include && valid) groupTotals[it.group] += amount;
+      detailRows.push({ group: it.group, name: it.name, custom: it.custom, include: it.include, base: baseLabel(it.base), baseAmount: it.base === 'fixed' ? '' : fmt(baseAmount), rate: it.base === 'fixed' ? '' : (it.rate === null ? '' : it.rate), fixed: it.base === 'fixed' ? fmt(it.fixed) : '', amount: fmt(amount), process: process, valid: valid });
+    });
+    var otherTotal = groupTotals.A + groupTotals.B + groupTotals.C;
+    ['A', 'B', 'C'].forEach(function (g) {
+      var el = document.querySelector('[data-group-total="' + g + '"]');
+      if (el) el.innerHTML = '<b>' + GROUPS[g] + '小计：' + fmt(groupTotals[g]) + ' 万元</b>';
+    });
+    var pctEng = eng > 0 ? (otherTotal / eng * 100) : 0;
+    var pctSum = (eng + otherTotal) > 0 ? (otherTotal / (eng + otherTotal) * 100) : 0;
+    $('otherSummary').innerHTML = '<b>其他费用合计：' + fmt(otherTotal) + ' 万元</b><br />占工程费用比例：' + fmt(pctEng) + '%（其他费用 ÷ 工程费用）；占（工程费用 + 其他费用）比例：' + fmt(pctSum) + '%。';
+    $('groupTotals').innerHTML = '<p class="muted">A 小计 ' + fmt(groupTotals.A) + ' 万元；B 小计 ' + fmt(groupTotals.B) + ' 万元；C 小计 ' + fmt(groupTotals.C) + ' 万元；合计 ' + fmt(otherTotal) + ' 万元。</p>';
+
+    // Basic reserve
+    var basicRateRaw = $('basicRate').value;
+    var basicRate = basicRateRaw === '' ? null : Number(basicRateRaw);
+    var basicBase = eng + otherTotal, basicAmount = 0;
+    if (basicRate === null) { $('basicFormula').textContent = '未填基本预备费费率，金额按 0 计。'; }
+    else if (isBad(basicRate)) { errors.push('基本预备费费率不能为负数或非数字，该项不参与合计。'); $('basicFormula').textContent = '基本预备费费率无效，金额不计入合计。'; }
+    else { basicAmount = basicBase * basicRate / 100; $('basicFormula').textContent = '基本预备费 =（工程费用 + 其他费用）× 费率 = ' + fmt(basicBase) + ' × ' + basicRate + '% = ' + fmt(basicAmount) + ' 万元'; }
+
+    // Price reserve
+    var priceAmount = 0, priceDetail = [];
+    if ($('priceEnabled').checked) {
+      var pYears = parseInt($('priceYears').value, 10);
+      var pRateRaw = $('priceRate').value;
+      var pRate = pRateRaw === '' ? null : Number(pRateRaw);
+      if (!(pYears >= 1 && pYears <= 10)) { errors.push('涨价预备费建设期应为 1 至 10 的整数年。'); }
+      else if (pRate === null) { $('priceFormula').textContent = '未填年涨价率，涨价预备费按 0 计。'; }
+      else if (isBad(pRate)) { errors.push('年涨价率不能为负数或非数字，涨价预备费不参与合计。'); }
+      else {
+        if ($('priceTableWrap').style.display === 'none' || document.querySelectorAll('[data-price-year]').length !== pYears) renderPriceRows(basicBase);
+        document.querySelectorAll('[data-price-year]').forEach(function (tr) {
+          var yr = Number(tr.getAttribute('data-price-year'));
+          var amtEl = tr.querySelector('[data-price-amount]');
+          var amt = Number(amtEl.value);
+          if (isBad(amt)) { errors.push('涨价预备费第 ' + yr + ' 年投资额无效，该年不参与合计。'); amt = 0; }
+          var coef = Math.pow(1 + pRate / 100, yr) - 1;
+          var pf = amt * coef;
+          priceAmount += pf;
+          tr.querySelector('[data-price-coef]').textContent = fmt(coef * 100) + '%';
+          tr.querySelector('[data-price-amount2]').textContent = fmt(pf);
+          priceDetail.push({ year: yr, amount: fmt(amt), coef: fmt(coef * 100) + '%', pf: fmt(pf) });
+        });
+        $('priceFormula').textContent = '涨价预备费合计 = 各年投资额 × [(1 + ' + pRate + '%)^年数 − 1] 之和 = ' + fmt(priceAmount) + ' 万元';
+      }
+    } else {
+      $('priceTableWrap').style.display = 'none';
+      $('priceFormula').textContent = '未启用涨价预备费，金额按 0 计。';
+    }
+
+    // Construction interest
+    var interestAmount = 0, interestDetail = [], interestValid = true;
+    if ($('interestEnabled').checked) {
+      var principalRaw = $('interestPrincipal').value, rateRaw = $('interestRate').value;
+      var principal = principalRaw === '' ? 0 : Number(principalRaw);
+      var iRate = rateRaw === '' ? null : Number(rateRaw);
+      var iYears = parseInt($('interestYears').value, 10);
+      if (isBad(principal)) { errors.push('建设期利息贷款本金不能为负数或非数字。'); interestValid = false; }
+      if (iRate === null) { $('interestFormula').textContent = '未填年利率，建设期利息按 0 计。'; interestValid = false; }
+      else if (isBad(iRate)) { errors.push('建设期利息年利率不能为负数或非数字。'); interestValid = false; }
+      if (!(iYears >= 1 && iYears <= 10)) { errors.push('建设期利息建设期应为 1 至 10 的整数年。'); interestValid = false; }
+      if (interestValid) {
+        if ($('interestTableWrap').style.display === 'none' || document.querySelectorAll('[data-interest-year]').length !== iYears) renderInterestRows();
+        var cum = 0, pctSum2 = 0;
+        document.querySelectorAll('[data-interest-year]').forEach(function (tr) {
+          var yr = Number(tr.getAttribute('data-interest-year'));
+          var pct = Number(tr.querySelector('[data-interest-pct]').value);
+          if (isBad(pct)) { errors.push('建设期利息第 ' + yr + ' 年提款比例无效。'); interestValid = false; pct = 0; }
+          pctSum2 += pct;
+          var draw = principal * pct / 100;
+          var yi = (cum + draw / 2) * iRate / 100;
+          interestAmount += yi;
+          cum = cum + draw + yi;
+          tr.querySelector('[data-interest-draw]').textContent = fmt(draw);
+          tr.querySelector('[data-interest-year-interest]').textContent = fmt(yi);
+          tr.querySelector('[data-interest-cum]').textContent = fmt(cum);
+          interestDetail.push({ year: yr, pct: pct, draw: fmt(draw), interest: fmt(yi), cum: fmt(cum) });
+        });
+        if (Math.abs(pctSum2 - 100) > 0.01) {
+          errors.push('建设期利息提款比例合计为 ' + fmt(pctSum2) + '%，不是 100%，利息不计入总投资，请调整比例。');
+          interestValid = false;
+        }
+        $('interestFormula').textContent = interestValid
+          ? '建设期利息合计 = ' + fmt(interestAmount) + ' 万元（逐年按“（以前年度累计本息 + 当年提款 ÷ 2）× 年利率”计算）'
+          : '建设期利息因输入问题不计入总投资，合计（仅供核对）= ' + fmt(interestAmount) + ' 万元。';
+      }
+    } else {
+      $('interestTableWrap').style.display = 'none';
+      $('interestFormula').textContent = '未启用建设期利息，金额按 0 计。';
+    }
+    var interestCounted = ($('interestEnabled').checked && $('interestInclude').checked && interestValid) ? interestAmount : 0;
+    var reserveTotal = basicAmount + priceAmount;
+    var total = eng + otherTotal + reserveTotal + interestCounted;
+    var comp = [
+      { name: '工程费用', amount: eng },
+      { name: '工程建设其他费用', amount: otherTotal },
+      { name: '预备费（基本 + 涨价）', amount: reserveTotal },
+      { name: '建设期利息（计入部分）', amount: interestCounted }
+    ];
+    $('totalTable').innerHTML = '<table><thead><tr><th>构成</th><th class="num">金额（万元）</th><th class="num">占总投资比例</th></tr></thead><tbody>' +
+      comp.map(function (c) { return '<tr><td>' + c.name + '</td><td class="num">' + fmt(c.amount) + '</td><td class="num">' + (total > 0 ? fmt(c.amount / total * 100) : '0.00') + '%</td></tr>'; }).join('') +
+      '</tbody></table>';
+    $('totalSummary').innerHTML = '<b>建设项目总投资 = 工程费用 + 其他费用 + 预备费 + 建设期利息（计入部分）= ' + fmt(eng) + ' + ' + fmt(otherTotal) + ' + ' + fmt(reserveTotal) + ' + ' + fmt(interestCounted) + ' = ' + fmt(total) + ' 万元</b>';
+
+    if (errors.length) {
+      $('errorBox').style.display = 'block';
+      $('errorBox').innerHTML = '<strong>输入校验：</strong><br />' + errors.map(function (e) { return '· ' + e; }).join('<br />');
+    } else {
+      $('errorBox').style.display = 'none';
+      $('errorBox').innerHTML = '';
+    }
+    lastCalc = { jianan: fmt(jianan), equip: fmt(equip), eng: fmt(eng), groupTotals: groupTotals, otherTotal: fmt(otherTotal), basicRate: basicRate, basicAmount: fmt(basicAmount), priceAmount: fmt(priceAmount), priceDetail: priceDetail, interestAmount: fmt(interestAmount), interestCounted: fmt(interestCounted), interestDetail: interestDetail, total: fmt(total), detailRows: detailRows };
+    return lastCalc;
+  }
+
+  function downloadCsv(filename, text) {
+    var blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  // Global inputs: recalc only (no re-render, so typing does not lose focus).
+  ['jianan', 'equip', 'basicRate', 'priceRate', 'interestPrincipal', 'interestRate'].forEach(function (id) {
+    $(id).addEventListener('input', calc);
+  });
+  ['priceEnabled', 'interestEnabled', 'interestInclude'].forEach(function (id) {
+    $(id).addEventListener('change', function () {
+      if (id === 'priceEnabled' && $('priceEnabled').checked) renderPriceRows(parseNum($('jianan').value) + parseNum($('equip').value) + (lastCalc ? Number(lastCalc.otherTotal) : 0));
+      if (id === 'interestEnabled' && $('interestEnabled').checked) renderInterestRows();
+      calc();
+    });
+  });
+  $('priceYears').addEventListener('change', function () { priceRowsCache = null; if ($('priceEnabled').checked) renderPriceRows(lastCalc ? (Number(lastCalc.eng) + Number(lastCalc.otherTotal)) : 0); calc(); });
+  $('interestYears').addEventListener('change', function () { interestRowsCache = null; if ($('interestEnabled').checked) renderInterestRows(); calc(); });
+  document.addEventListener('input', function (e) {
+    if (e.target && (e.target.getAttribute('data-field') || e.target.getAttribute('data-price-amount') !== null || e.target.getAttribute('data-interest-pct') !== null)) calc();
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.getAttribute('data-field')) calc();
+  });
+
+  $('fillExampleBtn').addEventListener('click', function () {
+    document.querySelectorAll('[data-row]').forEach(function (row) {
+      var id = Number(row.getAttribute('data-row'));
+      var it = null; for (var i = 0; i < items.length; i++) if (items[i].id === id) it = items[i];
+      if (it && it.exampleRate !== null && it.exampleRate !== undefined && it.base !== 'fixed') {
+        row.querySelector('[data-field="rate"]').value = it.exampleRate;
+      }
+    });
+    calc();
+  });
+  $('clearExampleBtn').addEventListener('click', function () {
+    document.querySelectorAll('[data-row]').forEach(function (row) {
+      var id = Number(row.getAttribute('data-row'));
+      var it = null; for (var i = 0; i < items.length; i++) if (items[i].id === id) it = items[i];
+      if (it && it.name !== '建设单位管理费' && it.base !== 'fixed') {
+        row.querySelector('[data-field="rate"]').value = '';
+      }
+    });
+    calc();
+  });
+  $('addCustomBtn').addEventListener('click', function () {
+    var name = $('customName').value.trim();
+    if (!name) { alert('请填写自定义费用名称。'); return; }
+    items.push({ id: nextId++, group: $('customGroup').value, name: name, base: $('customBase').value, rate: $('customRate').value === '' ? null : Number($('customRate').value), exampleRate: null, fixed: $('customFixed').value === '' ? 0 : Number($('customFixed').value), include: true, custom: true });
+    $('customName').value = ''; $('customRate').value = ''; $('customFixed').value = '';
+    renderFees(); calc();
+  });
+  $('exportBtn').addEventListener('click', function () {
+    var c = calc();
+    var lines = [];
+    lines.push(['分组', '费用名称', '是否计入', '计费基数', '基数（万元）', '费率（%）', '固定金额（万元）', '金额（万元）', '计算过程'].map(escCsv).join(','));
+    c.detailRows.forEach(function (r) {
+      lines.push([GROUPS[r.group], r.name, r.include ? '是' : '否', r.base, r.baseAmount, r.rate, r.fixed, r.amount, r.process].map(escCsv).join(','));
+    });
+    lines.push(['汇总', 'A 小计', '', '', '', '', '', fmt(c.groupTotals.A), ''].map(escCsv).join(','));
+    lines.push(['汇总', 'B 小计', '', '', '', '', '', fmt(c.groupTotals.B), ''].map(escCsv).join(','));
+    lines.push(['汇总', 'C 小计', '', '', '', '', '', fmt(c.groupTotals.C), ''].map(escCsv).join(','));
+    lines.push(['汇总', '其他费用合计', '', '', '', '', '', c.otherTotal, ''].map(escCsv).join(','));
+    lines.push(['预备费', '基本预备费', '', '工程费用+其他费用', '', c.basicRate === null ? '' : c.basicRate, '', c.basicAmount, ''].map(escCsv).join(','));
+    lines.push(['预备费', '涨价预备费', '', '', '', '', '', c.priceAmount, JSON.stringify(c.priceDetail)].map(escCsv).join(','));
+    lines.push(['建设期利息', '建设期利息（计入部分）', '', '', '', '', '', c.interestCounted, JSON.stringify(c.interestDetail)].map(escCsv).join(','));
+    lines.push(['总投资', '建设项目总投资', '', '', '', '', '', c.total, '工程费用 + 其他费用 + 预备费 + 建设期利息（计入部分）'].map(escCsv).join(','));
+    lines.push(['说明', '费率以项目批复、合同及现行文件为准；标注示例的数值仅为演示算例，不是四川标准；所有计算均在浏览器本地完成。', '', '', '', '', '', '', ''].map(escCsv).join(','));
+    downloadCsv('工程建设其他费明细.csv', lines.join('\r\n'));
+  });
+  $('resetBtn').addEventListener('click', function () {
+    cloneDefaults(); priceRowsCache = null; interestRowsCache = null;
+    $('jianan').value = ''; $('equip').value = ''; $('basicRate').value = 5;
+    $('priceEnabled').checked = false; $('interestEnabled').checked = false; $('interestInclude').checked = true;
+    renderFees(); calc();
+  });
+  $('clearCustomBtn').addEventListener('click', function () {
+    items = items.filter(function (it) { return !it.custom; });
+    renderFees(); calc();
+  });
+
+  cloneDefaults();
+  renderFees();
+  calc();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>五金手册 · 造价工具箱</title>
+<style>
+  :root { --brand: #0f766e; --ink: #0b1c30; --muted: #64748b; --line: #dbe4ef; --bg: #f6f8fb; --card: #fff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.6; }
+  header { background: #0b1c30; color: #fff; padding: 18px 20px; }
+  header a { color: #a2f1e7; }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  h2 { font-size: 17px; margin: 26px 0 10px; }
+  .note { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 12px 14px; }
+  .note.warn { background: #fffbeb; border-color: #fde68a; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .chips button { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .chips button.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+  input, select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .row label { display: grid; gap: 4px; color: var(--muted); font-size: 13px; }
+  .row label input, .row label select { color: var(--ink); font-size: 14px; }
+  button.primary { background: var(--brand); color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+  button.ghost { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
+  th { color: var(--muted); }
+  .tag-table { color: #0f766e; font-weight: 700; }
+  .tag-formula { color: #92400e; }
+  .muted { color: var(--muted); }
+  .result { background: #f8fafc; border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+  .result b { font-size: 16px; }
+  .formula { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: #f1f5f9; border-radius: 8px; padding: 10px; overflow-x: auto; white-space: pre-wrap; }
+  @media (max-width: 640px) { table { font-size: 12px; } th, td { padding: 6px 4px; } }
+</style>
+</head>
+<body>
+<header>
+  <a href="./index.html">← 工具箱首页</a>
+  <h1>五金手册</h1>
+  <p style="margin:0;color:#cbd5e1">型材理论重量与表面积查询 + 自定义计算。数据只在浏览器本地计算，不上传。</p>
+</header>
+<main>
+  <div class="note">
+    <strong>计算口径（先看这段再用数字）：</strong>钢材密度 7850 kg/m³，即单重（kg/m）= 截面面积（mm²）× 0.00785。
+    H 型钢、工字钢、槽钢、角钢的截面面积用忽略圆角的简化公式算出，实际国标表值已含圆角，会比公式值大 2%~4%。
+    表中标注 <span class="tag-table">国标表值</span> 的以国标表为准，标注 <span class="tag-formula">公式计算值</span> 的是按表中尺寸用公式算出的理论值，复核、采购、结算前请以国标表或供货方资料核对。
+    表面积为截面外轮廓周长 × 长度（钢板按双面计）。
+  </div>
+
+  <h2>1 · 常用规格表</h2>
+  <div class="card">
+    <div class="chips" id="chips"></div>
+    <div class="row">
+      <label>按规格关键字搜索<input id="q" type="search" placeholder="如 200、100×100、Φ20、16#" /></label>
+      <span id="count" class="muted"></span>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>类别</th><th>规格</th><th>截面尺寸</th><th>截面面积</th><th>理论重量</th><th>公式计算值</th><th>表面积</th><th>口径</th><th></th></tr></thead>
+        <tbody id="specBody"></tbody>
+      </table>
+    </div>
+    <p class="muted">钢板一行的重量单位是 kg/㎡，表面积是 ㎡/㎡（双面）；其余行重量单位是 kg/m，表面积单位是 ㎡/m。点“选用”会把该规格尺寸填入下方计算器。</p>
+  </div>
+
+  <h2>2 · 自定义计算器（多行累计）</h2>
+  <div class="card">
+    <div class="row">
+      <label>类别<select id="cat"></select></label>
+      <span id="dimFields" class="row"></span>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label id="lenLabel">长度（m）<input id="len" type="number" min="0" step="0.01" value="6" /></label>
+      <label id="widthLabel" style="display:none">宽度（m）<input id="width" type="number" min="0" step="0.01" value="1" /></label>
+      <label>数量（根 / 块 / 张）<input id="qty" type="number" min="1" step="1" value="1" /></label>
+      <button class="primary" id="calcBtn" type="button">计算并加入清单</button>
+    </div>
+    <div class="result" id="calcResult">先选类别、填尺寸，再点“计算并加入清单”。计算过程会在这里完整展示，不只给结果。</div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>类别</th><th>尺寸</th><th>长度</th><th>数量</th><th>单重</th><th>总重</th><th>总表面积</th><th></th></tr></thead>
+        <tbody id="listBody"></tbody>
+        <tfoot><tr><th colspan="5">合计</th><th id="totalWeight">0 kg</th><th id="totalArea">0 ㎡</th><th></th></tr></tfoot>
+      </table>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" id="exportBtn" type="button">导出清单为 CSV</button>
+      <button class="ghost" id="clearBtn" type="button">清空清单</button>
+      <span class="muted">CSV 含计算过程列，Excel 打开时如中文乱码，选“以 UTF-8 编码导入”。</span>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <strong>使用提醒：</strong>本页是理论计算工具，不是国标全文替代品。冷门规格、异形截面、镀锌层、焊缝、损耗、搭接都不在本页口径内，下料和结算请按图纸、国标表和合同约定执行。
+  </div>
+</main>
+<script type="module">
+import { CATEGORIES, SPECS, calcSection, catLabel, round2, round3 } from './steel-data.js';
+
+const $ = (id) => document.getElementById(id);
+let activeCat = 'all';
+const rows = [];
+
+function fmt(n, d = 2) { return Number(n).toFixed(d); }
+function weightText(s) {
+  if (s.catId === 'plate') return `${fmt(s.weight)} kg/㎡`;
+  return `${fmt(s.weight)} kg/m`;
+}
+function surfaceText(s) {
+  if (s.catId === 'plate') return `${fmt(s.surface)} ㎡/㎡`;
+  return `${fmt(s.surface, 3)} ㎡/m`;
+}
+function renderChips() {
+  const all = [{ id: 'all', label: '全部' }, ...CATEGORIES];
+  $('chips').innerHTML = all.map((c) =>
+    `<button type="button" class="${c.id === activeCat ? 'active' : ''}" data-cat="${c.id}">${c.label}</button>`).join('');
+  document.querySelectorAll('#chips button').forEach((b) => b.addEventListener('click', () => {
+    activeCat = b.dataset.cat; renderChips(); renderSpecs();
+  }));
+}
+function renderSpecs() {
+  const q = ($('q').value || '').trim().toLowerCase();
+  const list = SPECS.filter((s) =>
+    (activeCat === 'all' || s.catId === activeCat) &&
+    (q === '' || (s.name + ' ' + s.dimsText).toLowerCase().includes(q)));
+  $('count').textContent = `共 ${list.length} 条（全部 ${SPECS.length} 条）`;
+  $('specBody').innerHTML = list.map((s, i) => {
+    const idx = SPECS.indexOf(s);
+    const area = s.area === null ? '—' : `${fmt(s.area)} mm²`;
+    const main = s.source === 'table' ? `${fmt(s.tableWeight)} kg/m` : weightText(s);
+    const formula = s.source === 'table' ? `${fmt(s.weight)} kg/m` : '—';
+    const tag = s.source === 'table'
+      ? '<span class="tag-table">国标表值</span>'
+      : '<span class="tag-formula">公式计算值</span>';
+    return `<tr><td>${catLabel(s.catId)}</td><td>${s.name}</td><td>${s.dimsText}</td><td>${area}</td>` +
+      `<td>${s.catId === 'plate' ? weightText(s) : main}</td><td>${formula}</td>` +
+      `<td>${surfaceText(s)}</td><td>${tag}</td>` +
+      `<td><button class="ghost" type="button" data-use="${idx}">选用</button></td></tr>`;
+  }).join('') || '<tr><td colspan="9">没有匹配的规格，换个关键字试试。</td></tr>';
+  document.querySelectorAll('[data-use]').forEach((b) => b.addEventListener('click', () => {
+    const s = SPECS[Number(b.dataset.use)];
+    $('cat').value = s.catId; renderDimFields();
+    Object.entries(s.dims).forEach(([k, v]) => {
+      const el = document.querySelector(`[data-dim="${k}"]`);
+      if (el) el.value = v;
+    });
+    document.querySelector('h2:nth-of-type(2)').scrollIntoView({ behavior: 'smooth' });
+  }));
+}
+function renderCatOptions() {
+  $('cat').innerHTML = CATEGORIES.map((c) => `<option value="${c.id}">${c.label}（${c.unit}）</option>`).join('');
+}
+function renderDimFields() {
+  const cat = CATEGORIES.find((c) => c.id === $('cat').value);
+  $('dimFields').innerHTML = cat.fields.map((f) =>
+    `<label>${f.label}（${f.unit}）<input data-dim="${f.key}" type="number" min="0" step="0.01" placeholder="${f.label}" /></label>`).join('');
+  const isPlate = cat.id === 'plate';
+  $('widthLabel').style.display = isPlate ? 'grid' : 'none';
+  $('lenLabel').firstChild.textContent = isPlate ? '长度（m）' : '长度（m）';
+}
+function readDims() {
+  const dims = {};
+  document.querySelectorAll('[data-dim]').forEach((el) => { dims[el.dataset.dim] = Number(el.value); });
+  return dims;
+}
+function renderList() {
+  $('listBody').innerHTML = rows.map((r, i) => `<tr><td>${catLabel(r.catId)}</td><td>${r.dimsText}</td>` +
+    `<td>${r.len} m${r.catId === 'plate' ? ` × ${r.width} m` : ''}</td><td>${r.qty}</td>` +
+    `<td>${r.unitWeight}</td><td>${fmt(r.totalWeight)} kg</td><td>${fmt(r.totalArea)} ㎡</td>` +
+    `<td><button class="ghost" type="button" data-del="${i}">删除</button></td></tr>`).join('') ||
+    '<tr><td colspan="8">清单为空。</td></tr>';
+  const tw = rows.reduce((a, r) => a + r.totalWeight, 0);
+  const ta = rows.reduce((a, r) => a + r.totalArea, 0);
+  $('totalWeight').textContent = `${fmt(tw)} kg`;
+  $('totalArea').textContent = `${fmt(ta)} ㎡`;
+  document.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
+    rows.splice(Number(b.dataset.del), 1); renderList();
+  }));
+}
+function downloadCsv(filename, text) {
+  const blob = new Blob(['\ufeff' + text,], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function escCsv(v) { return `"${String(v).replaceAll('"', '""')}"`; }
+
+$('q').addEventListener('input', renderSpecs);
+$('cat').addEventListener('change', renderDimFields);
+$('calcBtn').addEventListener('click', () => {
+  const catId = $('cat').value;
+  const dims = readDims();
+  const cat = CATEGORIES.find((c) => c.id === catId);
+  const missing = cat.fields.filter((f) => !(dims[f.key] > 0));
+  const len = Number($('len').value);
+  const qty = Number($('qty').value);
+  if (missing.length || !(len > 0) || !(qty > 0)) {
+    $('calcResult').innerHTML = `<b style="color:#b91c1c">请把尺寸、长度、数量都填成大于 0 的数字。</b>`;
+    return;
+  }
+  if (catId === 'square' && dims.t * 2 >= dims.B) { $('calcResult').innerHTML = '<b style="color:#b91c1c">方管壁厚不能大于等于边长的一半。</b>'; return; }
+  if (catId === 'rect' && (dims.t * 2 >= dims.B || dims.t * 2 >= dims.H)) { $('calcResult').innerHTML = '<b style="color:#b91c1c">矩管壁厚不能大于等于边或高的一半。</b>'; return; }
+  if (catId === 'round' && dims.t * 2 >= dims.D) { $('calcResult').innerHTML = '<b style="color:#b91c1c">圆管壁厚不能大于等于外径的一半。</b>'; return; }
+  const c = calcSection(catId, dims);
+  const dimsText = cat.fields.map((f) => `${f.label} ${dims[f.key]}${f.unit}`).join('、');
+  let unitWeightText, totalWeight, totalArea, process2;
+  if (catId === 'plate') {
+    const width = Number($('width').value);
+    if (!(width > 0)) { $('calcResult').innerHTML = '<b style="color:#b91c1c">钢板请填写宽度。</b>'; return; }
+    const pieceArea = len * width;
+    totalWeight = c.weight * pieceArea * qty;
+    totalArea = 2 * pieceArea * qty;
+    unitWeightText = `${fmt(c.weight)} kg/㎡`;
+    process2 = `${c.process}；单张面积 = ${len} × ${width} = ${fmt(pieceArea)} ㎡；单张重量 = ${fmt(c.weight)} × ${fmt(pieceArea)} = ${fmt(c.weight * pieceArea)} kg；总重 = ${fmt(c.weight * pieceArea)} × ${qty} = ${fmt(totalWeight)} kg；总表面积（双面）= ${fmt(totalArea)} ㎡`;
+    rows.push({ catId, dimsText, len, width, qty, unitWeight: unitWeightText, totalWeight, totalArea, process: process2 });
+  } else {
+    totalWeight = c.weight * len * qty;
+    totalArea = c.surface * len * qty;
+    unitWeightText = `${fmt(c.weight)} kg/m`;
+    process2 = `${c.process}；总重 = ${fmt(c.weight)} × ${len} × ${qty} = ${fmt(totalWeight)} kg；总表面积 = ${fmt(c.surface, 3)} × ${len} × ${qty} = ${fmt(totalArea)} ㎡`;
+    rows.push({ catId, dimsText, len, qty, unitWeight: unitWeightText, totalWeight, totalArea, process: process2 });
+  }
+  // H 型钢命中国标表规格时，额外提示表值与公式值的差异。
+  let tableNote = '';
+  if (catId === 'h') {
+    const hit = SPECS.find((s) => s.catId === 'h' && s.dims.H === dims.H && s.dims.B === dims.B && s.dims.tw === dims.tw && s.dims.tf === dims.tf);
+    if (hit) tableNote = `<br />该规格有国标表值 ${fmt(hit.tableWeight)} kg/m，公式简化值为 ${fmt(c.weight)} kg/m，差值来自未计入的圆角；工程取用以国标表值 ${fmt(hit.tableWeight)} kg/m 为准，本行合计仍按公式值算出，如需按表值结算请以表值重算。`;
+  }
+  $('calcResult').innerHTML = `<b>单重 ${unitWeightText}，总重 ${fmt(totalWeight)} kg，总表面积 ${fmt(totalArea)} ㎡</b><div class="formula">${process2}${tableNote}</div>`;
+  renderList();
+});
+$('exportBtn').addEventListener('click', () => {
+  if (!rows.length) { alert('清单为空，先计算并加入至少一行。'); return; }
+  const head = ['类别', '尺寸', '长度(m)', '宽度(m)', '数量', '单重', '总重(kg)', '总表面积(㎡)', '计算过程'];
+  const lines = rows.map((r) => [catLabel(r.catId), r.dimsText, r.len, r.width || '', r.qty, r.unitWeight, fmt(r.totalWeight), fmt(r.totalArea), r.process].map(escCsv).join(','));
+  const tw = rows.reduce((a, r) => a + r.totalWeight, 0);
+  const ta = rows.reduce((a, r) => a + r.totalArea, 0);
+  lines.push(['合计', '', '', '', '', '', fmt(tw), fmt(ta), ''].map(escCsv).join(','));
+  downloadCsv('五金手册计算清单.csv', [head.map(escCsv).join(','), ...lines].join('\r\n'));
+});
+$('clearBtn').addEventListener('click', () => { rows.length = 0; renderList(); });
+
+renderCatOptions(); renderDimFields(); renderChips(); renderSpecs(); renderList();
+</script>
+</body>
+</html>
